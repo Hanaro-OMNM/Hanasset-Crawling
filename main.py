@@ -1,45 +1,92 @@
+# -*- coding: utf-8 -*-
 import requests
 from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
+import re
+import json
+import time
 
-options = webdriver.ChromeOptions()
-options.add_experimental_option("detach", True)
-options.add_experimental_option("excludeSwitches", ["enable-logging"])
+# 구 목록 및 헤더 설정
+city = ['금천구']
 
-url = "http://naver.com"
+header = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.220 Whale/1.3.51.7 Safari/537.36',
+    'Referer': 'https://m.land.naver.com/'
+}
 
-browser = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-browser.get(url)
+# 매물 데이터를 요청하는 URL
+property_url = "https://m.land.naver.com/cluster/ajax/articleList"
 
-search = browser.find_element(By.ID, "query")
-# input = input("매매가가 궁금한 아파트를 입력해주세요 : ")
-input = "송파 헬리오시티"
-search.send_keys(input+" 매물")
-search.send_keys(Keys.RETURN)
+# gu.txt 파일을 열어서 데이터를 저장 (w 모드)
+with open("gu.txt", 'w', encoding='utf-8') as f:
+    for gu in city:
+        # 구별로 위치 정보 URL 요청
+        url = "https://m.land.naver.com/search/result/" + gu
+        response = requests.get(url, headers=header)
 
-url = browser.current_url
-res = requests.get(url)
-res.raise_for_status()
+        if response.status_code == 200:
+            html = response.text
+            soup = BeautifulSoup(html, 'html.parser')
 
-soup = BeautifulSoup(res.text, "lxml")
+            # 위치 정보를 필터 데이터에서 추출
+            filter_data = re.findall('filter: {(.+?)},', str(soup.select('script')[3]), flags=re.DOTALL)
+            location_data = {}
+            try:
+                # 필터 데이터를 위치 정보로 변환
+                filter_parts = filter_data[0].split()
+                for j in range(len(filter_parts)):
+                    if j % 2 == 0:
+                        location_data[filter_parts[j].strip(":")] = filter_parts[j + 1].strip(',').strip("'")
+            except IndexError:
+                pass
 
-# with open("quiz.html", "w", encoding="utf8") as f:
-#   f.write(soup.prettify())
+            # 매물 데이터 요청에 필요한 위치 정보 추출
+            lat = location_data.get('lat', '')
+            lon = location_data.get('lon', '')
+            cortarNo = location_data.get('cortarNo', '')
 
-data_rows = soup.find("table", attrs={"class": "list"}).find("tbody").find_all("tr", attrs={"class": "_land_tr_row"})
+            # 매물 데이터 요청
+            param = {
+                'lat': lat,
+                'lon': lon,
+                'cortarNo': cortarNo,
+                'rletTpCd': 'APT',  # 매물 타입 (APT: 아파트)
+                'tradTpCd': 'A1:B1:B2',  # 거래 타입 (A1:매매, B1:전세, B2:월세)
+                'z': '12',  # 지도 줌 레벨
+                'sort': 'rank'
+            }
 
-for idx, row in enumerate(data_rows):
-  columns = row.find_all("td")
-  print(f"====== 매물 {idx+1} ======")
-  print("거래 :",columns[0].get_text())
-  print("소재지 :",columns[1].get_text())
-  print("단지명 :",columns[2].find("a").get_text())
-  print("면적 :",columns[3].get_text(),"(공급/전용)")
-  print("매물가 :",columns[4].get_text(),"(만원)")
-  print("층 :", columns[5].get_text(), "(해당층/총층)")
+            page = 0
+            while True:
+                page += 1
+                param['page'] = page
 
-browser.quit()
+                resp = requests.get(property_url, params=param, headers=header)
+                if resp.status_code != 200:
+                    print(f'Error fetching data for {gu}, page {page}')
+                    break
+
+                data = resp.json()
+                results = data.get('body', [])
+                if not results:
+                    break  # 매물이 없으면 루프 종료
+
+                # 매물 데이터 요청과 저장 루프 안에서
+                print(results)
+                for item in results:
+                    property_data = {
+                        "gu": gu,
+                        "atclNm": item.get('atclNm'),  # 매물 이름
+                        "rletTpCd": item.get('rletTpCd'),  # 매물 타입
+                        "tradTpNm": item.get('tradTpNm'),  # 거래 타입
+                        "bildNm": item.get('bildNm'),  # 건물 이름
+                        "flrInfo": item.get('flrInfo'),  # 층 정보
+                        "prc": item.get('prc'),  # 가격 정보
+                        "cpNm": item.get("cpNm"),  # 중개업소명
+                        "cortarNo": item.get("cortarNo"),  # 구 코드
+                        "lat": item.get("lat"),  # 위도 정보
+                        "lng": item.get("lng")  # 경도 정보
+                    }
+                    f.write(json.dumps(property_data, ensure_ascii=False) + "\n")  # JSON 형식으로 저장
+                time.sleep(1)  # 서버 과부하 방지를 위한 딜레이
+
+print("모든 구의 매물 데이터를 gu.txt에 저장했습니다.")
