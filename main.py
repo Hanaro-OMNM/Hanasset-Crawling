@@ -4,6 +4,27 @@ from bs4 import BeautifulSoup
 import re
 import json
 import time
+import math
+
+def calculate_bounds(lat, lon, zoom):
+    R = 6378137  # 지구 반지름 (미터)
+    scale = 2 ** zoom
+
+    # Mercator Projection
+    x = R * math.radians(lon)
+    y = R * math.log(math.tan(math.pi / 4 + math.radians(lat) / 2))
+
+    # 지도 영역 크기 (단위: 미터)
+    half_width = 5000 / scale  # 가로 반경
+    half_height = 5000 / scale  # 세로 반경
+
+    # 경계 계산
+    lft = math.degrees((x - half_width) / R)
+    rgt = math.degrees((x + half_width) / R)
+    btm = math.degrees(2 * math.atan(math.exp((y - half_height) / R)) - math.pi / 2)
+    top = math.degrees(2 * math.atan(math.exp((y + half_height) / R)) - math.pi / 2)
+
+    return {'btm': btm, 'top': top, 'lft': lft, 'rgt': rgt}
 
 # 구 목록 및 헤더 설정
 city = ['금천구']
@@ -20,35 +41,43 @@ property_url = "https://m.land.naver.com/cluster/ajax/articleList"
 with open("gu.txt", 'w', encoding='utf-8') as f:
     for gu in city:
         # 구별로 위치 정보 URL 요청
-        url = "https://m.land.naver.com/search/result/" + gu
-        response = requests.get(url, headers=header)
+        gu_url = "https://m.land.naver.com/search/result/" + gu
+        gu_response = requests.get(gu_url, headers=header)
 
-        if response.status_code == 200:
-            html = response.text
-            soup = BeautifulSoup(html, 'html.parser')
+        if gu_response.status_code == 200:
+            gu_html = gu_response.text
+            gu_soup = BeautifulSoup(gu_html, 'html.parser')
 
             # 위치 정보를 필터 데이터에서 추출
-            filter_data = re.findall('filter: {(.+?)},', str(soup.select('script')[3]), flags=re.DOTALL)
-            location_data = {}
+            gu_filter_data = re.findall('filter: {(.+?)},', str(gu_soup.select('script')[3]), flags=re.DOTALL)
+            gu_location_data = {}
             try:
                 # 필터 데이터를 위치 정보로 변환
-                filter_parts = filter_data[0].split()
-                for j in range(len(filter_parts)):
+                gu_filter_parts = gu_filter_data[0].split()
+                for j in range(len(gu_filter_parts)):
                     if j % 2 == 0:
-                        location_data[filter_parts[j].strip(":")] = filter_parts[j + 1].strip(',').strip("'")
+                        gu_location_data[gu_filter_parts[j].strip(":")] = gu_filter_parts[j + 1].strip(',').strip("'")
             except IndexError:
                 pass
 
             # 매물 데이터 요청에 필요한 위치 정보 추출
-            lat = location_data.get('lat', '')
-            lon = location_data.get('lon', '')
-            cortarNo = location_data.get('cortarNo', '')
+            gu_lat = gu_location_data.get('lat', '')
+            gu_lon = gu_location_data.get('lon', '')
+            gu_cortarNo = gu_location_data.get('cortarNo', '')
+            gu_btm = calculate_bounds(float(gu_lat), float(gu_lon), 12).get('btm')
+            gu_top = calculate_bounds(float(gu_lat), float(gu_lon), 12).get('top')
+            gu_lft = calculate_bounds(float(gu_lat), float(gu_lon), 12).get('lft')
+            gu_rgt = calculate_bounds(float(gu_lat), float(gu_lon), 12).get('rgt')
 
             # 매물 데이터 요청
-            param = {
-                'lat': lat,
-                'lon': lon,
-                'cortarNo': cortarNo,
+            gu_param = {
+                'lat': gu_lat,
+                'lon': gu_lon,
+                'btm': gu_btm,
+                'top': gu_top,
+                'lft': gu_lft,
+                'rgt': gu_rgt,
+                'cortarNo': gu_cortarNo,
                 'rletTpCd': 'APT',  # 매물 타입 (APT: 아파트)
                 'tradTpCd': 'A1:B1:B2',  # 거래 타입 (A1:매매, B1:전세, B2:월세)
                 'z': '12',  # 지도 줌 레벨
@@ -58,23 +87,23 @@ with open("gu.txt", 'w', encoding='utf-8') as f:
             page = 0
             while True:
                 page += 1
-                param['page'] = page
+                gu_param['page'] = page
 
-                resp = requests.get(property_url, params=param, headers=header)
-                if resp.status_code != 200:
+                gu_resp = requests.get(property_url, params=gu_param, headers=header)
+                if gu_resp.status_code != 200:
                     print(f'Error fetching data for {gu}, page {page}')
                     break
 
-                data = resp.json()
-                results = data.get('body', [])
-                if not results:
+                gu_data = gu_resp.json()
+                gu_results = gu_data.get('body', [])
+                if not gu_results:
                     break  # 매물이 없으면 루프 종료
 
                 # 매물 데이터 요청과 저장 루프 안에서
-                print(results)
-                for item in results:
+                for item in gu_results:
                     property_data = {
                         "gu": gu,
+                        "atclNo": item.get('atclNo'),
                         "atclNm": item.get('atclNm'),  # 매물 이름
                         "rletTpCd": item.get('rletTpCd'),  # 매물 타입
                         "tradTpNm": item.get('tradTpNm'),  # 거래 타입
@@ -86,7 +115,31 @@ with open("gu.txt", 'w', encoding='utf-8') as f:
                         "lat": item.get("lat"),  # 위도 정보
                         "lng": item.get("lng")  # 경도 정보
                     }
-                    f.write(json.dumps(property_data, ensure_ascii=False) + "\n")  # JSON 형식으로 저장
-                time.sleep(1)  # 서버 과부하 방지를 위한 딜레이
+                    article_num = item.get('atclNo')
+                    article_url = "https://fin.land.naver.com/articles/" + article_num
+                    article_response = requests.get(article_url)
+
+                    if article_response.status_code == 200:
+                        article_html = article_response.text
+                        article_soup = BeautifulSoup(article_html, 'html.parser')
+
+                        # 위치 정보를 필터 데이터에서 추출
+                        article_filter_data= json.loads(str(article_soup.select('script')[40].string))['props']['pageProps']['dehydratedState']['queries']
+
+                        estate_overall_data = {
+                            'basic_info' : property_data,
+                            'estate_key_info' : article_filter_data[0]['state']['data']['result'],
+                            'image_info' : article_filter_data[1],
+                            'price_info' : article_filter_data[2]['state']['data']['result'],
+                            'etc_info' : article_filter_data[3]['state']['data']['result'],
+                            'address_info' : article_filter_data[4]['state']['data']['result'],
+                            'maintenance_info' : article_filter_data[5]['state']['data']['result'],
+                            'floor_plan_info' : article_filter_data[6]['state']['data']['result'],
+                            'utility_info' : article_filter_data[7]['state']['data']['result'],
+                            'broker_info' : article_filter_data[8]['state']['data']['result']
+                        }
+
+                    f.write(json.dumps(estate_overall_data, ensure_ascii=False) + "\n")  # JSON 형식으로 저장
+                time.sleep(0.5)  # 서버 과부하 방지를 위한 딜레이
 
 print("모든 구의 매물 데이터를 gu.txt에 저장했습니다.")
