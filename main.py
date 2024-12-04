@@ -127,16 +127,16 @@ with open("gu.txt", 'w', encoding='utf-8') as f:
                         article_filter_data= json.loads(str(article_soup.select('script')[40].string))['props']['pageProps']['dehydratedState']['queries']
 
                         estate_overall_data = {
-                            'basic_info' : property_data,
-                            'estate_key_info' : article_filter_data[0]['state']['data']['result'],
-                            'image_info' : article_filter_data[1],
-                            'price_info' : article_filter_data[2]['state']['data']['result'],
-                            'etc_info' : article_filter_data[3]['state']['data']['result'],
-                            'address_info' : article_filter_data[4]['state']['data']['result'],
-                            'maintenance_info' : article_filter_data[5]['state']['data']['result'],
-                            'floor_plan_info' : article_filter_data[6]['state']['data']['result'],
-                            'utility_info' : article_filter_data[7]['state']['data']['result'],
-                            'broker_info' : article_filter_data[8]['state']['data']['result']
+                            'basicInfo' : property_data,
+                            'estateKeyInfo' : article_filter_data[0]['state']['data']['result'],
+                            'imageInfo' : article_filter_data[1],
+                            'priceInfo' : article_filter_data[2]['state']['data']['result'],
+                            'etcInfo' : article_filter_data[3]['state']['data']['result'],
+                            'addressInfo' : article_filter_data[4]['state']['data']['result'],
+                            'maintenanceInfo' : article_filter_data[5]['state']['data']['result'],
+                            'floorPlanInfo' : article_filter_data[6]['state']['data']['result'],
+                            'utilityInfo' : article_filter_data[7]['state']['data']['result'],
+                            'brokerInfo' : article_filter_data[8]['state']['data']['result']
                         }
 
                         # `tradeType` 종류 B1: 전세, B2: 월세
@@ -167,8 +167,9 @@ with open("gu.txt", 'w', encoding='utf-8') as f:
                             all_trade_data[trade_type] = all_real_price_data
 
                         # 수집한 모든 데이터를 `estate_overall_data`에 추가
-                        estate_overall_data['real_price_info'] = all_trade_data
+                        estate_overall_data['realPriceInfo'] = all_trade_data
 
+                        print(estate_overall_data)
                         f.write(json.dumps(estate_overall_data, ensure_ascii=False) + "\n")  # JSON 형식으로 저장
                         time.sleep(0.5)  # 서버 과부하 방지를 위한 딜레이
 
