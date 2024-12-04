@@ -79,7 +79,7 @@ with open("gu.txt", 'w', encoding='utf-8') as f:
                 'rgt': gu_rgt,
                 'cortarNo': gu_cortarNo,
                 'rletTpCd': 'APT',  # 매물 타입 (APT: 아파트)
-                'tradTpCd': 'A1:B1:B2',  # 거래 타입 (A1:매매, B1:전세, B2:월세)
+                'tradTpCd': 'B1:B2',  # 거래 타입 (B1:전세, B2:월세)
                 'z': '12',  # 지도 줌 레벨
                 'sort': 'rank'
             }
