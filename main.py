@@ -150,8 +150,8 @@ with open("gu.txt", 'w', encoding='utf-8') as f:
                             real_price_url = "https://fin.land.naver.com/front-api/v1/complex/pyeong/realPrice"
                             # 새로운 API 호출에 필요한 파라미터 생성
                             real_price_params = {
-                                "complexNumber": estate_overall_data['estate_key_info']['key']['complexNumber'],
-                                "pyeongTypeNumber": estate_overall_data['estate_key_info']['key']['pyeongTypeNumber'],
+                                "complexNumber": estate_overall_data['estateKeyInfo']['key']['complexNumber'],
+                                "pyeongTypeNumber": estate_overall_data['estateKeyInfo']['key']['pyeongTypeNumber'],
                                 "page": 1,
                                 "size": 10,
                                 "tradeType": trade_type
