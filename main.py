@@ -139,7 +139,48 @@ with open("gu.txt", 'w', encoding='utf-8') as f:
                             'broker_info' : article_filter_data[8]['state']['data']['result']
                         }
 
-                    f.write(json.dumps(estate_overall_data, ensure_ascii=False) + "\n")  # JSON 형식으로 저장
-                time.sleep(0.5)  # 서버 과부하 방지를 위한 딜레이
+                        # `tradeType` 종류 B1: 전세, B2: 월세
+                        trade_types = ["B1", "B2"]
+                        all_trade_data = {}
+
+                        for trade_type in trade_types:
+                            # `real_price_info` 데이터 리스트 초기화
+                            all_real_price_data = []
+
+
+                            real_price_url = "https://fin.land.naver.com/front-api/v1/complex/pyeong/realPrice"
+                            # 새로운 API 호출에 필요한 파라미터 생성
+                            real_price_params = {
+                                "complexNumber": estate_overall_data['estate_key_info']['key']['complexNumber'],
+                                "pyeongTypeNumber": estate_overall_data['estate_key_info']['key']['pyeongTypeNumber'],
+                                "page": 1,
+                                "size": 10,
+                                "tradeType": trade_type
+                            }
+
+                            # 새로운 API 반복 호출 (hasNextPage가 False일 때까지)
+                            while True:
+                                real_price_response = requests.get(real_price_url, params=real_price_params)
+                                
+                                if real_price_response.status_code == 200:
+                                    real_price_data = real_price_response.json()
+                                    all_real_price_data.extend(real_price_data['result']['list'])
+
+                                    if not real_price_data['result']['hasNextPage']:  # 다음 페이지가 없으면 루프 종료
+                                        break
+
+                                    real_price_params["page"] += 1  # 다음 페이지 요청
+                                else:
+                                    print(f"Failed to fetch real price data for tradeType {trade_type}, page {real_price_params['page']}")
+                                    break
+
+                            # 수집한 데이터를 `all_trade_data`에 저장
+                            all_trade_data[trade_type] = all_real_price_data
+
+                        # 수집한 모든 데이터를 `estate_overall_data`에 추가
+                        estate_overall_data['real_price_info'] = all_trade_data
+
+                        f.write(json.dumps(estate_overall_data, ensure_ascii=False) + "\n")  # JSON 형식으로 저장
+                        time.sleep(0.5)  # 서버 과부하 방지를 위한 딜레이
 
 print("모든 구의 매물 데이터를 gu.txt에 저장했습니다.")
