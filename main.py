@@ -129,13 +129,10 @@ with open("gu.txt", 'w', encoding='utf-8') as f:
                         estate_overall_data = {
                             'basicInfo' : property_data,
                             'estateKeyInfo' : article_filter_data[0]['state']['data']['result'],
-                            'imageInfo' : article_filter_data[1],
                             'priceInfo' : article_filter_data[2]['state']['data']['result'],
-                            'etcInfo' : article_filter_data[3]['state']['data']['result'],
                             'addressInfo' : article_filter_data[4]['state']['data']['result'],
                             'maintenanceInfo' : article_filter_data[5]['state']['data']['result'],
                             'floorPlanInfo' : article_filter_data[6]['state']['data']['result'],
-                            'utilityInfo' : article_filter_data[7]['state']['data']['result'],
                             'brokerInfo' : article_filter_data[8]['state']['data']['result']
                         }
 
