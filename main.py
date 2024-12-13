@@ -49,7 +49,7 @@ with open("gu.txt", 'w', encoding='utf-8') as f:
             gu_soup = BeautifulSoup(gu_html, 'html.parser')
 
             # 위치 정보를 필터 데이터에서 추출
-            gu_filter_data = re.findall('filter: {(.+?)},', str(gu_soup.select('script')[3]), flags=re.DOTALL)
+            gu_filter_data = re.findall('filter: {(.+?)},', str(gu_soup.select('script')[4]), flags=re.DOTALL)
             gu_location_data = {}
             try:
                 # 필터 데이터를 위치 정보로 변환
@@ -166,7 +166,6 @@ with open("gu.txt", 'w', encoding='utf-8') as f:
                         # 수집한 모든 데이터를 `estate_overall_data`에 추가
                         estate_overall_data['realPriceInfo'] = all_trade_data
 
-                        print(estate_overall_data)
                         f.write(json.dumps(estate_overall_data, ensure_ascii=False) + "\n")  # JSON 형식으로 저장
                         time.sleep(0.5)  # 서버 과부하 방지를 위한 딜레이
 
