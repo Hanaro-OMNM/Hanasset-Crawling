@@ -5,6 +5,23 @@ import re
 import json
 import time
 import math
+import mysql.connector
+from mysql.connector import Error
+
+def connect_to_mysql():
+    try:
+        connection = mysql.connector.connect(
+            host='localhost',       # MySQL 호스트
+            user='scott',   # MySQL 사용자 이름
+            password='tiger',  # MySQL 비밀번호
+            database='assignmentdb'  # 연결할 데이터베이스
+        )
+        if connection.is_connected():
+            print("MySQL 데이터베이스에 성공적으로 연결되었습니다.")
+        return connection
+    except Error as e:
+        print(f"Error: {e}")
+        return None
 
 def calculate_bounds(lat, lon, zoom):
     R = 6378137  # 지구 반지름 (미터)
@@ -26,147 +43,233 @@ def calculate_bounds(lat, lon, zoom):
 
     return {'btm': btm, 'top': top, 'lft': lft, 'rgt': rgt}
 
-# 구 목록 및 헤더 설정
-city = ['금천구']
+# MySQL에 데이터 삽입
+connection = connect_to_mysql()
+if connection:
+    # 구 목록 및 헤더 설정
+    city = ['금천구']
 
-header = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.220 Whale/1.3.51.7 Safari/537.36',
-    'Referer': 'https://m.land.naver.com/'
-}
+    header = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.220 Whale/1.3.51.7 Safari/537.36',
+        'Referer': 'https://m.land.naver.com/'
+    }
 
-# 매물 데이터를 요청하는 URL
-property_url = "https://m.land.naver.com/cluster/ajax/articleList"
+    # 매물 데이터를 요청하는 URL
+    property_url = "https://m.land.naver.com/cluster/ajax/articleList"
 
-# gu.txt 파일을 열어서 데이터를 저장 (w 모드)
-with open("gu.txt", 'w', encoding='utf-8') as f:
-    for gu in city:
-        # 구별로 위치 정보 URL 요청
-        gu_url = "https://m.land.naver.com/search/result/" + gu
-        gu_response = requests.get(gu_url, headers=header)
+    # gu.txt 파일을 열어서 데이터를 저장 (w 모드)
+    with open("gu.txt", 'w', encoding='utf-8') as f:
+        for gu in city:
+            # 구별로 위치 정보 URL 요청
+            gu_url = "https://m.land.naver.com/search/result/" + gu
+            gu_response = requests.get(gu_url, headers=header)
 
-        if gu_response.status_code == 200:
-            gu_html = gu_response.text
-            gu_soup = BeautifulSoup(gu_html, 'html.parser')
+            if gu_response.status_code == 200:
+                gu_html = gu_response.text
+                gu_soup = BeautifulSoup(gu_html, 'html.parser')
 
-            # 위치 정보를 필터 데이터에서 추출
-            gu_filter_data = re.findall('filter: {(.+?)},', str(gu_soup.select('script')[4]), flags=re.DOTALL)
-            gu_location_data = {}
-            try:
-                # 필터 데이터를 위치 정보로 변환
-                gu_filter_parts = gu_filter_data[0].split()
-                for j in range(len(gu_filter_parts)):
-                    if j % 2 == 0:
-                        gu_location_data[gu_filter_parts[j].strip(":")] = gu_filter_parts[j + 1].strip(',').strip("'")
-            except IndexError:
-                pass
+                # 위치 정보를 필터 데이터에서 추출
+                gu_filter_data = re.findall('filter: {(.+?)},', str(gu_soup.select('script')[4]), flags=re.DOTALL)
+                gu_location_data = {}
+                try:
+                    # 필터 데이터를 위치 정보로 변환
+                    gu_filter_parts = gu_filter_data[0].split()
+                    for j in range(len(gu_filter_parts)):
+                        if j % 2 == 0:
+                            gu_location_data[gu_filter_parts[j].strip(":")] = gu_filter_parts[j + 1].strip(',').strip("'")
+                except IndexError:
+                    pass
 
-            # 매물 데이터 요청에 필요한 위치 정보 추출
-            gu_lat = gu_location_data.get('lat', '')
-            gu_lon = gu_location_data.get('lon', '')
-            gu_cortarNo = gu_location_data.get('cortarNo', '')
-            gu_btm = calculate_bounds(float(gu_lat), float(gu_lon), 12).get('btm')
-            gu_top = calculate_bounds(float(gu_lat), float(gu_lon), 12).get('top')
-            gu_lft = calculate_bounds(float(gu_lat), float(gu_lon), 12).get('lft')
-            gu_rgt = calculate_bounds(float(gu_lat), float(gu_lon), 12).get('rgt')
+                # 매물 데이터 요청에 필요한 위치 정보 추출
+                gu_lat = gu_location_data.get('lat', '')
+                gu_lon = gu_location_data.get('lon', '')
+                gu_cortarNo = gu_location_data.get('cortarNo', '')
+                gu_btm = calculate_bounds(float(gu_lat), float(gu_lon), 12).get('btm')
+                gu_top = calculate_bounds(float(gu_lat), float(gu_lon), 12).get('top')
+                gu_lft = calculate_bounds(float(gu_lat), float(gu_lon), 12).get('lft')
+                gu_rgt = calculate_bounds(float(gu_lat), float(gu_lon), 12).get('rgt')
 
-            # 매물 데이터 요청
-            gu_param = {
-                'lat': gu_lat,
-                'lon': gu_lon,
-                'btm': gu_btm,
-                'top': gu_top,
-                'lft': gu_lft,
-                'rgt': gu_rgt,
-                'cortarNo': gu_cortarNo,
-                'rletTpCd': 'APT',  # 매물 타입 (APT: 아파트)
-                'tradTpCd': 'B1:B2',  # 거래 타입 (B1:전세, B2:월세)
-                'z': '12',  # 지도 줌 레벨
-                'sort': 'rank'
-            }
+                # 매물 데이터 요청
+                gu_param = {
+                    'lat': gu_lat,
+                    'lon': gu_lon,
+                    'btm': gu_btm,
+                    'top': gu_top,
+                    'lft': gu_lft,
+                    'rgt': gu_rgt,
+                    'cortarNo': gu_cortarNo,
+                    'rletTpCd': 'APT',  # 매물 타입 (APT: 아파트)
+                    'tradTpCd': 'B1:B2',  # 거래 타입 (B1:전세, B2:월세)
+                    'z': '12',  # 지도 줌 레벨
+                    'sort': 'rank'
+                }
 
-            page = 0
-            while True:
-                page += 1
-                gu_param['page'] = page
+                page = 0
+                while True:
+                    page += 1
+                    gu_param['page'] = page
 
-                gu_resp = requests.get(property_url, params=gu_param, headers=header)
-                if gu_resp.status_code != 200:
-                    print(f'Error fetching data for {gu}, page {page}')
-                    break
+                    gu_resp = requests.get(property_url, params=gu_param, headers=header)
+                    if gu_resp.status_code != 200:
+                        print(f'Error fetching data for {gu}, page {page}')
+                        break
 
-                gu_data = gu_resp.json()
-                gu_results = gu_data.get('body', [])
-                if not gu_results:
-                    break  # 매물이 없으면 루프 종료
+                    gu_data = gu_resp.json()
+                    gu_results = gu_data.get('body', [])
+                    if not gu_results:
+                        break  # 매물이 없으면 루프 종료
 
-                # 매물 데이터 요청과 저장 루프 안에서
-                for item in gu_results:
-                    property_data = {
-                        "gu": gu,
-                        "atclNo": item.get('atclNo'),
-                        "atclNm": item.get('atclNm'),  # 매물 이름
-                        "rletTpCd": item.get('rletTpCd'),  # 매물 타입
-                        "tradTpNm": item.get('tradTpNm'),  # 거래 타입
-                        "bildNm": item.get('bildNm'),  # 건물 이름
-                        "flrInfo": item.get('flrInfo'),  # 층 정보
-                        "prc": item.get('prc'),  # 가격 정보
-                        "cpNm": item.get("cpNm"),  # 중개업소명
-                        "cortarNo": item.get("cortarNo"),  # 구 코드
-                        "lat": item.get("lat"),  # 위도 정보
-                        "lng": item.get("lng")  # 경도 정보
-                    }
-                    article_num = item.get('atclNo')
-                    article_url = "https://fin.land.naver.com/articles/" + article_num
-                    article_response = requests.get(article_url)
-
-                    if article_response.status_code == 200:
-                        article_html = article_response.text
-                        article_soup = BeautifulSoup(article_html, 'html.parser')
-
-                        # 위치 정보를 필터 데이터에서 추출
-                        article_filter_data= json.loads(str(article_soup.select('script')[40].string))['props']['pageProps']['dehydratedState']['queries']
-
-                        estate_overall_data = {
-                            'basicInfo' : property_data,
-                            'estateKeyInfo' : article_filter_data[0]['state']['data']['result'],
-                            'priceInfo' : article_filter_data[2]['state']['data']['result'],
-                            'addressInfo' : article_filter_data[4]['state']['data']['result'],
-                            'maintenanceInfo' : article_filter_data[5]['state']['data']['result'],
-                            'floorPlanInfo' : article_filter_data[6]['state']['data']['result'],
-                            'brokerInfo' : article_filter_data[8]['state']['data']['result']
+                    # 매물 데이터 요청과 저장 루프 안에서
+                    for item in gu_results:
+                        property_data = {
+                            "gu": gu,
+                            "atclNo": item.get('atclNo'),
+                            "atclNm": item.get('atclNm'),  # 매물 이름
+                            "rletTpCd": item.get('rletTpCd'),  # 매물 타입
+                            "tradTpNm": item.get('tradTpNm'),  # 거래 타입
+                            "bildNm": item.get('bildNm'),  # 건물 이름
+                            "flrInfo": item.get('flrInfo'),  # 층 정보
+                            "prc": item.get('prc'),  # 가격 정보
+                            "cpNm": item.get("cpNm"),  # 중개업소명
+                            "cortarNo": item.get("cortarNo"),  # 구 코드
+                            "lat": item.get("lat"),  # 위도 정보
+                            "lng": item.get("lng"),  # 경도 정보
+                            "img": item.get("repImgUrl")
                         }
+                        article_num = item.get('atclNo')
+                        article_url = "https://fin.land.naver.com/articles/" + article_num
+                        article_response = requests.get(article_url)
 
-                        # `tradeType` 종류 B1: 전세, B2: 월세
-                        trade_types = ["B1", "B2"]
-                        all_trade_data = {}
+                        if article_response.status_code == 200:
+                            article_html = article_response.text
+                            article_soup = BeautifulSoup(article_html, 'html.parser')
 
-                        for trade_type in trade_types:
-                            # `real_price_info` 데이터 리스트 초기화
-                            all_real_price_data = []
+                            # 위치 정보를 필터 데이터에서 추출
+                            article_filter_data= json.loads(str(article_soup.select('script')[40].string))['props']['pageProps']['dehydratedState']['queries']
 
-                            real_price_url = "https://fin.land.naver.com/front-api/v1/complex/pyeong/realPrice"
-                            # 새로운 API 호출에 필요한 파라미터 생성
-                            real_price_params = {
-                                "complexNumber": estate_overall_data['estateKeyInfo']['key']['complexNumber'],
-                                "pyeongTypeNumber": estate_overall_data['estateKeyInfo']['key']['pyeongTypeNumber'],
-                                "page": 1,
-                                "size": 10,
-                                "tradeType": trade_type
+                            estate_overall_data = {
+                                'basicInfo' : property_data,
+                                'estateKeyInfo' : article_filter_data[0]['state']['data']['result'],
+                                'priceInfo' : article_filter_data[2]['state']['data']['result'],
+                                'addressInfo' : article_filter_data[4]['state']['data']['result'],
+                                'maintenanceInfo' : article_filter_data[5]['state']['data']['result'],
+                                'floorPlanInfo' : article_filter_data[6]['state']['data']['result'],
+                                'brokerInfo' : article_filter_data[8]['state']['data']['result']
                             }
-                            real_price_response = requests.get(real_price_url, params=real_price_params)
-                            
-                            if real_price_response.status_code == 200:
-                                real_price_data = real_price_response.json()
-                                all_real_price_data.extend(real_price_data['result']['list'])
+
+                            pyeongListUrl = "https://fin.land.naver.com/front-api/v1/complex/pyeong"
+                            pyeongListparams = {
+                                "complexNumber": estate_overall_data['estateKeyInfo']['key']['complexNumber'],
+                                "pyeongTypeNumber": estate_overall_data['estateKeyInfo']['key']['pyeongTypeNumber']
+                            }
+                            pyeong_list_response = requests.get(pyeongListUrl, params=pyeongListparams)
+                            print(pyeong_list_response.json())
+
+                            # # `tradeType` 종류 B1: 전세, B2: 월세
+                            # trade_types = ["B1", "B2"]
+                            # all_trade_data = {}
+                            #
+                            # for trade_type in trade_types:
+                            #     # `real_price_info` 데이터 리스트 초기화
+                            #     all_real_price_data = []
+                            #
+                            #     real_price_url = "https://fin.land.naver.com/front-api/v1/complex/pyeong/realPrice"
+                            #     # 새로운 API 호출에 필요한 파라미터 생성
+                            #     real_price_params = {
+                            #         "complexNumber": estate_overall_data['estateKeyInfo']['key']['complexNumber'],
+                            #         "pyeongTypeNumber": estate_overall_data['estateKeyInfo']['key']['pyeongTypeNumber'],
+                            #         "page": 1,
+                            #         "size": 10,
+                            #         "tradeType": trade_type
+                            #     }
+                            #     real_price_response = requests.get(real_price_url, params=real_price_params)
+                            #
+                            #     if real_price_response.status_code == 200:
+                            #         real_price_data = real_price_response.json()
+                            #         all_real_price_data.extend(real_price_data['result']['list'])
+                            #
+                            #
+                            #     # 수집한 데이터를 `all_trade_data`에 저장
+                            #     all_trade_data[trade_type] = all_real_price_data
+                            #
+                            # # 수집한 모든 데이터를 `estate_overall_data`에 추가
+                            # estate_overall_data['realPriceInfo'] = all_trade_data
 
 
-                            # 수집한 데이터를 `all_trade_data`에 저장
-                            all_trade_data[trade_type] = all_real_price_data
+                            try:
+                                cursor = connection.cursor(prepared=True)
 
-                        # 수집한 모든 데이터를 `estate_overall_data`에 추가
-                        estate_overall_data['realPriceInfo'] = all_trade_data
+                                complex_insert_sql = """
+                                    INSERT INTO housing_complex(area_code_id, code, name, address, unit_count, established_date,
+                                    system_type, energy_type, parking_count, dong_count, floor_area_ratio, building_coverage_ratio, construction_company)
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                """
 
-                        f.write(json.dumps(estate_overall_data, ensure_ascii=False) + "\n")  # JSON 형식으로 저장
-                        time.sleep(0.5)  # 서버 과부하 방지를 위한 딜레이
+                                complex_insert_data = (
+                                    estate_overall_data['basicInfo']['cortarNo'],
+                                    estate_overall_data['estateKeyInfo']['key']['complexNumber'],
+                                    estate_overall_data['basicInfo']['atclNm'],
+                                    estate_overall_data['addressInfo']['address']['legalDivision'] + ' ' +
+                                    estate_overall_data['addressInfo']['address']['roadName'],
+                                    estate_overall_data['addressInfo']['totalHouseholdNumber'],
+                                    estate_overall_data['addressInfo']['useApprovalDate'],
+                                    estate_overall_data['addressInfo']['heatingAndCoolingInfo']['heatingAndCoolingSystemType'],
+                                    estate_overall_data['addressInfo']['heatingAndCoolingInfo']['heatingEnergyType'],
+                                    estate_overall_data['addressInfo']['parkingInfo']['totalParkingCount'],
+                                    estate_overall_data['addressInfo']['dongCount'],
+                                    estate_overall_data['addressInfo']['buildingRatioInfo']['floorAreaRatio'],
+                                    estate_overall_data['addressInfo']['buildingRatioInfo']['buildingCoverageRatio'],
+                                    estate_overall_data['addressInfo']['constructionCompany']
+                                )
 
-print("모든 구의 매물 데이터를 gu.txt에 저장했습니다.")
+                                type_insert_sql = """
+                                    INSERT INTO housing_type(code, name, unit_count, supply_area_size,
+                                    exclusive_area_size, management_fee, floor_plan_img_url, floor_plan_link)
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                                """
+
+                                type_insert_data = (
+                                    pyeong_list_response.json()[''],
+
+                                )
+
+                                # real_estate_latitude = estate_overall_data['basicInfo']['lat']
+                                # real_estate_longitude = estate_overall_data['basicInfo']['lng']
+                                # point_wkt = f"POINT({real_estate_latitude} {real_estate_longitude})"
+                                #
+                                # real_estate_insert_sql = """
+                                #     INSERT INTO real_estate (code, name, type, rent_type, address, location, coordinate,
+                                #     deposit, price, description, room_direction, standard_direction, real_estate_img_urls)
+                                #     VALUES (%s, %s, %s, %s, %s, %s, ST_GeomFromText(%s, 4326), %s, %s, %s, %s, %s, %s)
+                                # """
+                                #
+                                # real_estate_insert_data = (
+                                #     int(estate_overall_data['basicInfo']['atclNo']),
+                                #     estate_overall_data['basicInfo']['atclNm'],
+                                #     estate_overall_data['basicInfo']['tradTpNm'],
+                                #     estate_overall_data['basicInfo']['rletTpCd'],
+                                #     estate_overall_data['addressInfo']['address']['legalDivision'] + ' ' +
+                                #     estate_overall_data['addressInfo']['address']['roadName'],
+                                #     point_wkt,
+                                #     estate_overall_data['priceInfo']['priceInfo']['warrantyAmount'],
+                                #     estate_overall_data['priceInfo']['priceInfo']['rentAmount'],
+                                #     estate_overall_data['priceInfo']['detailInfo']['articleDetailInfo'][
+                                #         'articleFeatureDescription'],
+                                #     estate_overall_data['priceInfo']['detailInfo']['spaceInfo']['direction'],
+                                #     estate_overall_data['priceInfo']['detailInfo']['spaceInfo']['directionStandard'],
+                                #     estate_overall_data['basicInfo']['img'],
+                                # )
+                                #
+                                # cursor.execute(real_estate_insert_sql, real_estate_insert_data)
+
+                                connection.commit()
+                                print(f"{cursor.rowcount}개의 데이터가 삽입되었습니다.")
+
+                            except Error as e:
+                                print(f"Error: {e}")
+                            finally:
+                                cursor.close()
+
+                            time.sleep(0.5)  # 서버 과부하 방지를 위한 딜레이
+    print("모든 구의 매물 데이터를 gu.txt에 저장했습니다.")
+connection.close()
