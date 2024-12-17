@@ -12,9 +12,9 @@ def connect_to_mysql():
     try:
         connection = mysql.connector.connect(
             host='localhost',       # MySQL 호스트
-            user='scott',   # MySQL 사용자 이름
-            password='tiger',  # MySQL 비밀번호
-            database='assignmentdb'  # 연결할 데이터베이스
+            user='root',   # MySQL 사용자 이름
+            password='root1234',  # MySQL 비밀번호
+            database='omnm'  # 연결할 데이터베이스
         )
         if connection.is_connected():
             print("MySQL 데이터베이스에 성공적으로 연결되었습니다.")
@@ -42,6 +42,13 @@ def calculate_bounds(lat, lon, zoom):
     top = math.degrees(2 * math.atan(math.exp((y + half_height) / R)) - math.pi / 2)
 
     return {'btm': btm, 'top': top, 'lft': lft, 'rgt': rgt}
+
+def get_value(data, keys, default=None):
+    for key in keys:
+        data = data.get(key, default)
+        if data is default:
+            break
+    return data
 
 # MySQL에 데이터 삽입
 connection = connect_to_mysql()
@@ -163,64 +170,39 @@ if connection:
                                 "pyeongTypeNumber": estate_overall_data['estateKeyInfo']['key']['pyeongTypeNumber']
                             }
                             pyeong_list_response = requests.get(pyeongListUrl, params=pyeongListparams)
+                            pyeong_list_response = pyeong_list_response.json()
 
-                            # # `tradeType` 종류 B1: 전세, B2: 월세
-                            # trade_types = ["B1", "B2"]
-                            # all_trade_data = {}
-                            #
-                            # for trade_type in trade_types:
-                            #     # `real_price_info` 데이터 리스트 초기화
-                            #     all_real_price_data = []
-                            #
-                            #     real_price_url = "https://fin.land.naver.com/front-api/v1/complex/pyeong/realPrice"
-                            #     # 새로운 API 호출에 필요한 파라미터 생성
-                            #     real_price_params = {
-                            #         "complexNumber": estate_overall_data['estateKeyInfo']['key']['complexNumber'],
-                            #         "pyeongTypeNumber": estate_overall_data['estateKeyInfo']['key']['pyeongTypeNumber'],
-                            #         "page": 1,
-                            #         "size": 10,
-                            #         "tradeType": trade_type
-                            #     }
-                            #     real_price_response = requests.get(real_price_url, params=real_price_params)
-                            #
-                            #     if real_price_response.status_code == 200:
-                            #         real_price_data = real_price_response.json()
-                            #         all_real_price_data.extend(real_price_data['result']['list'])
-                            #
-                            #
-                            #     # 수집한 데이터를 `all_trade_data`에 저장
-                            #     all_trade_data[trade_type] = all_real_price_data
-                            #
-                            # # 수집한 모든 데이터를 `estate_overall_data`에 추가
-                            # estate_overall_data['realPriceInfo'] = all_trade_data
-
-
+                            
                             try:
                                 cursor = connection.cursor(prepared=True)
 
-                                find_area_code_id = """
-                                    SELECT area_code_id FROM area_code WHERE code = %s
-                                """
+                                #hosing_complex 테이블의 확인
+                                housing_complex_id = -1
+                                find_housing_complex = "SELECT housing_complex_id FROM housing_complex WHERE code = %s"
+                                cursor.execute(find_housing_complex, (int(estate_overall_data['estateKeyInfo']['key']['complexNumber']),))
+                                result = cursor.fetchone()
 
-                                find_complex_id = """
-                                    SELECT id FROM housing_complex WHERE code = %s
-                                """
+                                if result is None:
+                                    # area_code_id 찾기
+                                    find_area_code_id = """
+                                        SELECT area_code_id FROM area_code WHERE code = %s
+                                    """
+                                    cursor.execute(find_area_code_id, (int(estate_overall_data['basicInfo']['cortarNo']),))
+                                    area_code_id = cursor.fetchone()
 
-                                complex_insert_sql = """
-                                    INSERT INTO housing_complex(
-                                        area_code_id, code, name, address, unit_count, established_date,
-                                        system_type, energy_type, parking_count, dong_count, floor_area_ratio, 
-                                        building_coverage_ratio, construction_company
-                                    )
-                                    VALUES (
-                                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-                                    )
-                                """
+                                    # hosing_complex 테이블 삽입
+                                    complex_insert_sql = """
+                                        INSERT INTO housing_complex(
+                                            area_code_id, code, name, address, unit_count, established_date,
+                                            system_type, energy_type, parking_count, dong_count, floor_area_ratio, 
+                                            building_coverage_ratio, construction_company
+                                        )
+                                        VALUES (
+                                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                                        )
+                                    """
 
-                                cursor.execute(find_area_code_id, (int(estate_overall_data['basicInfo']['cortarNo']),))
-                                area_code_id = cursor.fetchone()
-
-                                complex_insert_data = (
+                                    complex_insert_data = (
                                     area_code_id[0],
                                     estate_overall_data['estateKeyInfo']['key']['complexNumber'],
                                     estate_overall_data['basicInfo']['atclNm'],
@@ -236,56 +218,76 @@ if connection:
                                     estate_overall_data['addressInfo']['buildingRatioInfo']['floorAreaRatio'],
                                     estate_overall_data['addressInfo']['buildingRatioInfo']['buildingCoverageRatio'],
                                     estate_overall_data['addressInfo']['constructionCompany'],
-                                )
+                                    )
 
-                                find_complex_id = """
-                                    SELECT area_code_id FROM housing_complex WHERE code = %s
-                                """
-
-                                type_insert_sql = """
-                                    INSERT INTO housing_type(code, name, unit_count, entrance_type, supply_area_size, exclusive_area_size, management_fee, room_count, 
-                                    bathroom_count, floor_plan_img_url, floor_plan_link)
-                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                                """
-
-                                # complex 테이블에서 id 확인
-                                cursor.execute(find_complex_id,(estate_overall_data['estateKeyInfo']['key']['complexNumber'],))
-                                complex_result = cursor.fetchone()
-
-                                if len(pyeong_list_response.json()['result']['floorPlanUrls']) > 0 :
-                                    if "BASE" in pyeong_list_response.json()['result']['floorPlanUrls']:
-                                        floor_plan_urls = pyeong_list_response.json()['result']['floorPlanUrls']['BASE']['0'][2]
-                                    else:
-                                        floor_plan_urls = pyeong_list_response.json()['result']['floorPlanUrls']['EXPN']['OPT1'][2]
+                                    cursor.execute(complex_insert_sql, complex_insert_data)
+                                    connection.commit()
+                                    housing_complex_id = cursor.lastrowid
                                 else:
-                                    floor_plan_urls = ''
+                                    housing_complex_id = result[0]
+                                    
+                                #housing_type 테이블의 확인
+                                housing_type_id = -1
+                                find_housing_type = "SELECT housing_type_id FROM housing_type WHERE housing_complex_id = %s AND code = %s"
 
-                                type_insert_data = (
-                                    pyeong_list_response.json()['result']['number'],
-                                    pyeong_list_response.json()['result']['name'],
-                                    pyeong_list_response.json()['result']['unitsOfSameArea'],
-                                    pyeong_list_response.json()['result']['entranceType'],
-                                    pyeong_list_response.json()['result']['supplyArea'],
-                                    pyeong_list_response.json()['result']['exclusiveArea'],
-                                    estate_overall_data['maintenanceInfo']['yearMonthFee'],
-                                    pyeong_list_response.json()['result']['roomCount'],
-                                    pyeong_list_response.json()['result']['bathRoomCount'],
-                                    floor_plan_urls,
-                                    "https://fin.land.naver.com/complexes/" + str(estate_overall_data['estateKeyInfo']['key']['complexNumber'])
-                                    + "?tab=complex-info",
+                                find_housing_type_data = (
+                                    housing_complex_id,
+                                    pyeong_list_response['result']['number']
                                 )
+                                cursor.execute(find_housing_type, find_housing_type_data)
+                                find_housing_type_data_result = cursor.fetchone()
 
+                                if find_housing_type_data_result is None:
+                                    # housing_type 테이블 삽입
+                                    type_insert_sql = """
+                                        INSERT INTO housing_type(housing_complex_id, code, name, unit_count, entrance_type, supply_area_size, exclusive_area_size, management_fee, room_count, 
+                                        bathroom_count, floor_plan_img_url, floor_plan_link)
+                                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                    """
+
+                                    floor_plan_urls = ''
+                                    if len(pyeong_list_response['result']['floorPlanUrls']) > 0 :
+                                        if "BASE" in pyeong_list_response['result']['floorPlanUrls']:
+                                            floor_plan_urls = pyeong_list_response['result']['floorPlanUrls']['BASE']['0'][2]
+                                        else:
+                                            floor_plan_urls = pyeong_list_response['result']['floorPlanUrls']['EXPN']['OPT1'][2]
+
+                                    
+                                    type_insert_data = (
+                                        housing_complex_id,
+                                        pyeong_list_response['result']['number'],
+                                        pyeong_list_response['result']['name'],
+                                        pyeong_list_response['result']['unitsOfSameArea'],
+                                        pyeong_list_response['result']['entranceType'],
+                                        pyeong_list_response['result']['supplyArea'],
+                                        pyeong_list_response['result']['exclusiveArea'],
+                                        estate_overall_data['maintenanceInfo']['yearMonthFee'],
+                                        pyeong_list_response['result']['roomCount'],
+                                        pyeong_list_response['result']['bathRoomCount'],
+                                        floor_plan_urls,
+                                        "https://fin.land.naver.com/complexes/" + str(estate_overall_data['estateKeyInfo']['key']['complexNumber'])
+                                        + "?tab=complex-info",
+                                    )
+
+                                    cursor.execute(type_insert_sql, type_insert_data)
+                                    connection.commit()
+                                    housing_type_id = cursor.lastrowid
+                                else:
+                                    housing_type_id = find_housing_type_data_result[0]
+                                
+                                # real_estate 삽입
                                 real_estate_latitude = estate_overall_data['basicInfo']['lat']
                                 real_estate_longitude = estate_overall_data['basicInfo']['lng']
                                 point_wkt = f"POINT({real_estate_latitude} {real_estate_longitude})"
 
                                 real_estate_insert_sql = """
-                                    INSERT INTO real_estate (code, name, type, rent_type, address, coordinate,
-                                    deposit, price, description, direction_standard, direction_facing, real_estate_img_urls, total_floor, target_floor)
-                                    VALUES (%s, %s, %s, %s, %s, ST_GeomFromText(%s, 4326), %s, %s, %s, %s, %s, %s, %s, %s)
+                                    INSERT INTO real_estate (housing_type_id, code, name, type, rent_type, address_detail, coordinate,
+                                    deposit, price, description, direction_standard, direction_facing, img_urls, total_floor, target_floor)
+                                    VALUES (%s, %s, %s, %s, %s, %s, ST_GeomFromText(%s, 4326), %s, %s, %s, %s, %s, %s, %s, %s)
                                 """
 
                                 real_estate_insert_data = (
+                                    housing_type_id,
                                     int(estate_overall_data['basicInfo']['atclNo']),
                                     estate_overall_data['basicInfo']['atclNm'],
                                     estate_overall_data['basicInfo']['tradTpNm'],
@@ -303,12 +305,10 @@ if connection:
                                     estate_overall_data['priceInfo']['detailInfo']['spaceInfo']['floorInfo']['targetFloor']
                                 )
 
-                                cursor.execute(complex_insert_sql, complex_insert_data)
-                                cursor.execute(type_insert_sql, type_insert_data)
-                                # cursor.execute(real_estate_insert_sql, real_estate_insert_data)
-
+                                
+                                cursor.execute(real_estate_insert_sql, real_estate_insert_data)
                                 connection.commit()
-                                print(f"{cursor.rowcount}개의 데이터가 삽입되었습니다.")
+                                print(f"{cursor.lastrowid} 매물 데이터 생성 완료")
 
                             except Error as e:
                                 print(f"Error: {e}")
@@ -317,4 +317,4 @@ if connection:
 
                             time.sleep(0.5)  # 서버 과부하 방지를 위한 딜레이
     print("모든 구의 매물 데이터를 gu.txt에 저장했습니다.")
-connection.close()
+    connection.close()
