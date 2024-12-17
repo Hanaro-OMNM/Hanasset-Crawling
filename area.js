@@ -25,64 +25,6 @@ function extractCodes(code) {
   return { city_code, sigungu_code, emd_code };
 }
 
-// // 메인 함수: CSV 파싱 및 데이터 삽입
-// async function parseCSVAndInsert() {
-//   try {
-//     const insertQuery = `
-//       INSERT INTO area_code (
-//         code, address, city_code, emd_code, sigungu_code,
-//         city_name, sigungu_name, emd_name, coordinate
-//       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ST_GeomFromText(?, 4326))
-//     `;
-
-//     fs.createReadStream(csvFilePath)
-//       .pipe(csv({ headers: false }))
-//       .on('data', async (row) => {
-//         try {
-//           // CSV 행에서 필요한 데이터 추출
-//           const [code, address, longitude, latitude] = [
-//             parseInt(row[0]),
-//             row[1],
-//             parseFloat(row[2]),
-//             parseFloat(row[3]),
-//           ];
-
-//           const { city_code, sigungu_code, emd_code } = extractCodes(code);
-
-//           const [city_name, sigungu_name, emd_name] = address.split(' ');
-
-//           const coordinate = createPointString(longitude, latitude);
-
-//           // 데이터 삽입
-//           connection.query(insertQuery, [
-//             code,
-//             address,
-//             city_code,
-//             emd_code,
-//             sigungu_code,
-//             city_name,
-//             sigungu_name,
-//             emd_name,
-//             coordinate,
-//           ]);
-
-//           console.log(`Inserted: ${address}`);
-//         } catch (err) {
-//           console.error('Error inserting row:', err.message);
-//         }
-//       })
-//       .on('end', async () => {
-//         await connection.commit();
-//         console.log('CSV file successfully processed and data inserted.');
-//         await connection.end();
-//       });
-//   } catch (error) {
-//     await connection.rollback();
-//     console.error('Transaction failed:', error.message);
-//     await connection.end();
-//   }
-// }
-
 // 메인 함수: CSV 파싱 및 데이터 삽입
 async function parseCSVAndInsert() {
   const insertQuery = `
