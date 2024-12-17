@@ -163,7 +163,6 @@ if connection:
                                 "pyeongTypeNumber": estate_overall_data['estateKeyInfo']['key']['pyeongTypeNumber']
                             }
                             pyeong_list_response = requests.get(pyeongListUrl, params=pyeongListparams)
-                            print(pyeong_list_response.json())
 
                             # # `tradeType` 종류 B1: 전세, B2: 월세
                             # trade_types = ["B1", "B2"]
@@ -199,67 +198,113 @@ if connection:
                             try:
                                 cursor = connection.cursor(prepared=True)
 
-                                complex_insert_sql = """
-                                    INSERT INTO housing_complex(area_code_id, code, name, address, unit_count, established_date,
-                                    system_type, energy_type, parking_count, dong_count, floor_area_ratio, building_coverage_ratio, construction_company)
-                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                find_area_code_id = """
+                                    SELECT area_code_id FROM area_code WHERE code = %s
                                 """
 
+                                find_complex_id = """
+                                    SELECT id FROM housing_complex WHERE code = %s
+                                """
+
+                                complex_insert_sql = """
+                                    INSERT INTO housing_complex(
+                                        area_code_id, code, name, address, unit_count, established_date,
+                                        system_type, energy_type, parking_count, dong_count, floor_area_ratio, 
+                                        building_coverage_ratio, construction_company
+                                    )
+                                    VALUES (
+                                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                                    )
+                                """
+
+                                cursor.execute(find_area_code_id, (int(estate_overall_data['basicInfo']['cortarNo']),))
+                                area_code_id = cursor.fetchone()
+
                                 complex_insert_data = (
-                                    estate_overall_data['basicInfo']['cortarNo'],
+                                    area_code_id[0],
                                     estate_overall_data['estateKeyInfo']['key']['complexNumber'],
                                     estate_overall_data['basicInfo']['atclNm'],
                                     estate_overall_data['addressInfo']['address']['legalDivision'] + ' ' +
                                     estate_overall_data['addressInfo']['address']['roadName'],
                                     estate_overall_data['addressInfo']['totalHouseholdNumber'],
                                     estate_overall_data['addressInfo']['useApprovalDate'],
-                                    estate_overall_data['addressInfo']['heatingAndCoolingInfo']['heatingAndCoolingSystemType'],
+                                    estate_overall_data['addressInfo']['heatingAndCoolingInfo'][
+                                        'heatingAndCoolingSystemType'],
                                     estate_overall_data['addressInfo']['heatingAndCoolingInfo']['heatingEnergyType'],
                                     estate_overall_data['addressInfo']['parkingInfo']['totalParkingCount'],
                                     estate_overall_data['addressInfo']['dongCount'],
                                     estate_overall_data['addressInfo']['buildingRatioInfo']['floorAreaRatio'],
                                     estate_overall_data['addressInfo']['buildingRatioInfo']['buildingCoverageRatio'],
-                                    estate_overall_data['addressInfo']['constructionCompany']
+                                    estate_overall_data['addressInfo']['constructionCompany'],
                                 )
 
-                                type_insert_sql = """
-                                    INSERT INTO housing_type(code, name, unit_count, supply_area_size,
-                                    exclusive_area_size, management_fee, floor_plan_img_url, floor_plan_link)
-                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                                find_complex_id = """
+                                    SELECT area_code_id FROM housing_complex WHERE code = %s
                                 """
 
-                                type_insert_data = (
-                                    pyeong_list_response.json()[''],
+                                type_insert_sql = """
+                                    INSERT INTO housing_type(code, name, unit_count, entrance_type, supply_area_size, exclusive_area_size, management_fee, room_count, 
+                                    bathroom_count, floor_plan_img_url, floor_plan_link)
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                """
 
+                                # complex 테이블에서 id 확인
+                                cursor.execute(find_complex_id,(estate_overall_data['estateKeyInfo']['key']['complexNumber'],))
+                                complex_result = cursor.fetchone()
+
+                                if len(pyeong_list_response.json()['result']['floorPlanUrls']) > 0 :
+                                    if "BASE" in pyeong_list_response.json()['result']['floorPlanUrls']:
+                                        floor_plan_urls = pyeong_list_response.json()['result']['floorPlanUrls']['BASE']['0'][2]
+                                    else:
+                                        floor_plan_urls = pyeong_list_response.json()['result']['floorPlanUrls']['EXPN']['OPT1'][2]
+                                else:
+                                    floor_plan_urls = ''
+
+                                type_insert_data = (
+                                    pyeong_list_response.json()['result']['number'],
+                                    pyeong_list_response.json()['result']['name'],
+                                    pyeong_list_response.json()['result']['unitsOfSameArea'],
+                                    pyeong_list_response.json()['result']['entranceType'],
+                                    pyeong_list_response.json()['result']['supplyArea'],
+                                    pyeong_list_response.json()['result']['exclusiveArea'],
+                                    estate_overall_data['maintenanceInfo']['yearMonthFee'],
+                                    pyeong_list_response.json()['result']['roomCount'],
+                                    pyeong_list_response.json()['result']['bathRoomCount'],
+                                    floor_plan_urls,
+                                    "https://fin.land.naver.com/complexes/" + str(estate_overall_data['estateKeyInfo']['key']['complexNumber'])
+                                    + "?tab=complex-info",
                                 )
 
-                                # real_estate_latitude = estate_overall_data['basicInfo']['lat']
-                                # real_estate_longitude = estate_overall_data['basicInfo']['lng']
-                                # point_wkt = f"POINT({real_estate_latitude} {real_estate_longitude})"
-                                #
-                                # real_estate_insert_sql = """
-                                #     INSERT INTO real_estate (code, name, type, rent_type, address, location, coordinate,
-                                #     deposit, price, description, room_direction, standard_direction, real_estate_img_urls)
-                                #     VALUES (%s, %s, %s, %s, %s, %s, ST_GeomFromText(%s, 4326), %s, %s, %s, %s, %s, %s)
-                                # """
-                                #
-                                # real_estate_insert_data = (
-                                #     int(estate_overall_data['basicInfo']['atclNo']),
-                                #     estate_overall_data['basicInfo']['atclNm'],
-                                #     estate_overall_data['basicInfo']['tradTpNm'],
-                                #     estate_overall_data['basicInfo']['rletTpCd'],
-                                #     estate_overall_data['addressInfo']['address']['legalDivision'] + ' ' +
-                                #     estate_overall_data['addressInfo']['address']['roadName'],
-                                #     point_wkt,
-                                #     estate_overall_data['priceInfo']['priceInfo']['warrantyAmount'],
-                                #     estate_overall_data['priceInfo']['priceInfo']['rentAmount'],
-                                #     estate_overall_data['priceInfo']['detailInfo']['articleDetailInfo'][
-                                #         'articleFeatureDescription'],
-                                #     estate_overall_data['priceInfo']['detailInfo']['spaceInfo']['direction'],
-                                #     estate_overall_data['priceInfo']['detailInfo']['spaceInfo']['directionStandard'],
-                                #     estate_overall_data['basicInfo']['img'],
-                                # )
-                                #
+                                real_estate_latitude = estate_overall_data['basicInfo']['lat']
+                                real_estate_longitude = estate_overall_data['basicInfo']['lng']
+                                point_wkt = f"POINT({real_estate_latitude} {real_estate_longitude})"
+
+                                real_estate_insert_sql = """
+                                    INSERT INTO real_estate (code, name, type, rent_type, address, coordinate,
+                                    deposit, price, description, direction_standard, direction_facing, real_estate_img_urls, total_floor, target_floor)
+                                    VALUES (%s, %s, %s, %s, %s, ST_GeomFromText(%s, 4326), %s, %s, %s, %s, %s, %s, %s, %s)
+                                """
+
+                                real_estate_insert_data = (
+                                    int(estate_overall_data['basicInfo']['atclNo']),
+                                    estate_overall_data['basicInfo']['atclNm'],
+                                    estate_overall_data['basicInfo']['tradTpNm'],
+                                    estate_overall_data['basicInfo']['rletTpCd'],
+                                    estate_overall_data['priceInfo']['communalComplexInfo']['dongName'],
+                                    point_wkt,
+                                    estate_overall_data['priceInfo']['priceInfo']['warrantyAmount'],
+                                    estate_overall_data['priceInfo']['priceInfo']['rentAmount'],
+                                    estate_overall_data['priceInfo']['detailInfo']['articleDetailInfo'][
+                                        'articleFeatureDescription'],
+                                    estate_overall_data['priceInfo']['detailInfo']['spaceInfo']['direction'],
+                                    estate_overall_data['priceInfo']['detailInfo']['spaceInfo']['directionStandard'],
+                                    estate_overall_data['basicInfo']['img'],
+                                    estate_overall_data['priceInfo']['detailInfo']['spaceInfo']['floorInfo']['totalFloor'],
+                                    estate_overall_data['priceInfo']['detailInfo']['spaceInfo']['floorInfo']['targetFloor']
+                                )
+
+                                cursor.execute(complex_insert_sql, complex_insert_data)
+                                cursor.execute(type_insert_sql, type_insert_data)
                                 # cursor.execute(real_estate_insert_sql, real_estate_insert_data)
 
                                 connection.commit()
