@@ -102,8 +102,8 @@ def insert_real_estate(cursor, housing_type_id, estate_data):
         estate_data['priceInfo']['priceInfo']['warrantyAmount'],
         estate_data['priceInfo']['priceInfo']['rentAmount'],
         estate_data['priceInfo']['detailInfo']['articleDetailInfo']['articleFeatureDescription'],
-        estate_data['priceInfo']['detailInfo']['spaceInfo']['direction'],
         estate_data['priceInfo']['detailInfo']['spaceInfo']['directionStandard'],
+        estate_data['priceInfo']['detailInfo']['spaceInfo']['direction'],
         estate_data['basicInfo']['img'],
         estate_data['priceInfo']['detailInfo']['spaceInfo']['floorInfo'].get('totalFloor', None),
         target_floor
