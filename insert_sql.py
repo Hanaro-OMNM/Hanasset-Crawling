@@ -88,7 +88,7 @@ def insert_real_estate(cursor, housing_type_id, estate_data):
     insert_query = """
         INSERT INTO real_estate (
             housing_type_id, code, name, type, rent_type, address_detail, coordinate,
-            deposit, price, description, direction_standard, direction_facing, img_urls, total_floor, target_floor
+            deposit, price, description, direction_standard, direction_facing, img_url, total_floor, target_floor
         ) VALUES (%s, %s, %s, %s, %s, %s, ST_GeomFromText(%s, 4326), %s, %s, %s, %s, %s, %s, %s, %s)
     """
     insert_data = (
