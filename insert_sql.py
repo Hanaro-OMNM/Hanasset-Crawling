@@ -1,4 +1,20 @@
+import requests
 from utils import approveDateUtil, calculate_bounds, targetFloorUtil
+
+def get_housing_complex_coordinate(address):
+    accessToken = '863cad39-6698-4458-8f7b-2c0ba61'
+    
+    url = f"https://sgisapi.kostat.go.kr/OpenAPI3/addr/geocodewgs84.json"
+    params = {
+        'accessToken': accessToken,
+        'address': address
+    }
+    response = requests.get(url, params=params)
+    response_data = response.json()
+    
+    coordinate = response_data['result']['resultdata'][0]
+    return f"POINT({coordinate['y']} {coordinate['x']})"
+    
 
 def find_or_insert_housing_complex(cursor, estate_data):
     """
@@ -15,18 +31,22 @@ def find_or_insert_housing_complex(cursor, estate_data):
         cursor.execute(find_area_query, (int(estate_data['basicInfo']['cortarNo']),))
         area_code_id = cursor.fetchone()
 
+
+        housing_complex_coordinate = get_housing_complex_coordinate(estate_data['addressInfo']['address']['legalDivision'] + ' ' + estate_data['addressInfo']['address']['roadName'])
+
         insert_query = """
             INSERT INTO housing_complex(
-                area_code_id, code, name, address, unit_count, established_date,
+                area_code_id, code, name, address, coordinate, unit_count, established_date,
                 system_type, energy_type, parking_count, dong_count, floor_area_ratio, 
                 building_coverage_ratio, construction_company
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, ST_GeomFromText(%s, 4326), %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         insert_data = (
             area_code_id[0],
             estate_data['estateKeyInfo']['key'].get('complexNumber', None),
             estate_data['basicInfo']['atclNm'],
             estate_data['addressInfo']['address']['legalDivision'] + ' ' + estate_data['addressInfo']['address']['roadName'],
+            housing_complex_coordinate,
             estate_data['addressInfo']['totalHouseholdNumber'],
             approveDateUtil(estate_data['addressInfo']['useApprovalDate']),
             estate_data['addressInfo']['heatingAndCoolingInfo']['heatingAndCoolingSystemType'],
