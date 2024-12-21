@@ -61,5 +61,5 @@ def fetch_article_filter_data(url):
     html = response.text
     soup = BeautifulSoup(html, 'html.parser')
 
-    return json.loads(str(soup.select('script')[40].string))['props']['pageProps']['dehydratedState']['queries']
+    return json.loads(str(soup.select('script')[37].string))['props']['pageProps']['dehydratedState']['queries']
 

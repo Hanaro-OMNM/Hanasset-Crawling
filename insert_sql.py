@@ -2,11 +2,16 @@ import requests
 from utils import approveDateUtil, calculate_bounds, targetFloorUtil
 
 def get_housing_complex_coordinate(address):
-    accessToken = '863cad39-6698-4458-8f7b-2c0ba61'
+    access_url = "https://sgisapi.kostat.go.kr/OpenAPI3/auth/authentication.json"
+    access_params = {
+        'consumer_key' : "d995660ff592470792b9",
+        'consumer_secret' : "2a643a5d68d1443d9e19",
+    }
+    access_token = requests.get(access_url, params=access_params).json()['result']['accessToken']
     
     url = f"https://sgisapi.kostat.go.kr/OpenAPI3/addr/geocodewgs84.json"
     params = {
-        'accessToken': accessToken,
+        'accessToken': access_token,
         'address': address
     }
     response = requests.get(url, params=params)
