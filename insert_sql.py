@@ -16,10 +16,12 @@ def get_housing_complex_coordinate(address):
     }
     response = requests.get(url, params=params)
     response_data = response.json()
-    
-    coordinate = response_data['result']['resultdata'][0]
-    return f"POINT({coordinate['y']} {coordinate['x']})"
-    
+
+    if 'result' in response_data and 'resultdata' in response_data['result']:
+        coordinate = response_data['result']['resultdata'][0]
+        return f"POINT({coordinate['y']} {coordinate['x']})"
+    else:
+        return None
 
 def find_or_insert_housing_complex(cursor, estate_data):
     """
@@ -36,8 +38,10 @@ def find_or_insert_housing_complex(cursor, estate_data):
         cursor.execute(find_area_query, (int(estate_data['basicInfo']['cortarNo']),))
         area_code_id = cursor.fetchone()
 
-
-        housing_complex_coordinate = get_housing_complex_coordinate(estate_data['addressInfo']['address']['legalDivision'] + ' ' + estate_data['addressInfo']['address']['roadName'])
+        housing_complex_coordinate = get_housing_complex_coordinate(
+            (estate_data['addressInfo']['address'].get('legalDivision') or '') + ' ' +
+            (estate_data['addressInfo']['address'].get('roadName') or '')
+        )
 
         insert_query = """
             INSERT INTO housing_complex(
@@ -50,10 +54,11 @@ def find_or_insert_housing_complex(cursor, estate_data):
             area_code_id[0],
             estate_data['estateKeyInfo']['key'].get('complexNumber', None),
             estate_data['basicInfo']['atclNm'],
-            estate_data['addressInfo']['address']['legalDivision'] + ' ' + estate_data['addressInfo']['address']['roadName'],
+            (estate_data['addressInfo']['address'].get('legalDivision') or '') + ' ' +
+            (estate_data['addressInfo']['address'].get('roadName') or ''),
             housing_complex_coordinate,
             estate_data['addressInfo']['totalHouseholdNumber'],
-            approveDateUtil(estate_data['addressInfo']['useApprovalDate']),
+            approveDateUtil(estate_data['addressInfo'].get('useApprovalDate')) if estate_data['addressInfo'].get('useApprovalDate') else '',
             estate_data['addressInfo']['heatingAndCoolingInfo']['heatingAndCoolingSystemType'],
             estate_data['addressInfo']['heatingAndCoolingInfo']['heatingEnergyType'],
             estate_data['addressInfo']['parkingInfo']['totalParkingCount'],
@@ -77,8 +82,12 @@ def find_or_insert_housing_type(cursor, housing_complex_id, pyeong_data, estate_
         floor_plan_urls = ''
         if len(pyeong_data['result']['floorPlanUrls']) > 0:
             base_urls = pyeong_data['result']['floorPlanUrls'].get('BASE', {}).get('0', [])
-            floor_plan_urls = base_urls[0] if len(base_urls) == 1 else base_urls[2] if base_urls else ''
-
+            floor_plan_urls = (
+                base_urls[0] if len(base_urls) > 0
+                else base_urls[1] if len(base_urls) > 1
+                else base_urls[2] if len(base_urls) > 2
+                else ''
+            )
         insert_query = """
             INSERT INTO housing_type(
                 housing_complex_id, code, name, unit_count, entrance_type, supply_area_size,
